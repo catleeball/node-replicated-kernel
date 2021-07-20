@@ -998,6 +998,7 @@ name = "nrk"
 version = "0.0.4"
 dependencies = [
  "addr2line 0.16.0",
+ "abomonation",
  "apic",
  "arrayvec",
  "atopology",
