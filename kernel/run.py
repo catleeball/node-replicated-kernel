@@ -110,6 +110,8 @@ parser.add_argument("-d", "--qemu-debug-cpu", action="store_true",
                     help="Debug CPU reset (for qemu)")
 parser.add_argument('--nic', default='e1000', choices=["e1000", "virtio", "vmxnet3"],
                     help='What NIC model to use for emulation', required=False)
+parser.add_argument('-g', '--gdb', action="store_true",
+                    help="Expect GDB remote connection in kernel")
 
 # Baremetal argument
 parser.add_argument('--configure-ipxe', action="store_true", default=False,
@@ -164,6 +166,8 @@ def build_kernel(args):
                 build_args += ["--no-default-features"]
             for feature in args.kfeatures:
                 build_args += ['--features', feature]
+            if args.gdb:
+                build_args += ['--features', 'gdb']
             build_args += CARGO_DEFAULT_ARGS
             if args.verbose:
                 print("cd {}".format(KERNEL_PATH))
@@ -309,6 +313,11 @@ def run_qemu(args):
     # '-nographic',
     qemu_default_args += ['-display', 'none', '-serial', 'stdio']
 
+    if args.gdb:
+        # Add a second serial line (VM I/O port 0x2f8 <-> localhost:1234) that
+        # we use to connect with gdb
+        qemu_default_args += ['-serial', 'tcp:127.0.0.1:1234,server,nowait']
+
     # Add UEFI bootloader support
     qemu_default_args += ['-drive',
                           'if=pflash,format=raw,file={}/OVMF_CODE.fd,readonly=on'.format(BOOTLOADER_PATH)]
@@ -359,6 +368,7 @@ def run_qemu(args):
 
     pmem_test_path = "test"
     pmem = "off"
+
     def pmem_paths(args):
         paths = []
         host_numa_nodes_list = query_host_numa()
@@ -406,7 +416,7 @@ def run_qemu(args):
                 qemu_default_args += ['-object', 'memory-backend-file,id=pmem{},mem-path={},size={}M,pmem={},share=on'.format(
                     node, pmem_paths[node], int(pmem_per_node), pmem)]
                 qemu_default_args += ['-device',
-                                    'nvdimm,node={},slot={},id=nvdimm{},memdev=pmem{}'.format(node, node, node, node)]
+                                      'nvdimm,node={},slot={},id=nvdimm{},memdev=pmem{}'.format(node, node, node, node)]
 
     if args.qemu_nodes and args.qemu_nodes > 0 and int(args.qemu_pmem):
         qemu_default_args += ['-M', 'nvdimm=on,nvdimm-persistence=cpu']
@@ -662,6 +672,11 @@ if __name__ == '__main__':
         print("or run `sudo chmod +666 /dev/kvm` if you don't care about")
         print("kvm access restriction on the machine.")
         sys.exit(errno.EACCES)
+
+    if 'gdb' in args.kfeatures and not args.gdb:
+        print("You set gdb in kfeatures but haven't provided `--gdb` to `run.py`.")
+        print("Just use `--gdb` to make sure `run.py` configures QEMU with the proper serial line.")
+        sys.exit(errno.EINVAL)
 
     if args.release:
         CARGO_DEFAULT_ARGS.append("--release")
