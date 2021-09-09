@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::alloc::Layout;
 use core::mem::transmute;
+use core::ops::Add;
 use core::pin::Pin;
 use core::ptr::NonNull;
 
@@ -876,5 +878,67 @@ impl PageTable {
     fn get_pdpt_mut(&mut self, entry: PML4Entry) -> &mut PDPT {
         assert_ne!(entry.address(), PAddr::zero());
         unsafe { transmute::<VAddr, &mut PDPT>(paddr_to_kernel_vaddr(entry.address())) }
+    }
+
+    pub fn get_dirty_pages(&self, _start: VAddr, _end: VAddr) -> Vec<PAddr> {
+        let mut dirty_pages: Vec<PAddr> = Vec::new();
+
+        // TODO: Use the range given by the arguments, and not for the full pmem region.
+        let mut pmem_iter = atopology::MACHINE_TOPOLOGY.persistent_memory();
+        for entry in &mut pmem_iter {
+            let phys_range_start = VAddr::from(entry.phys_start);
+            let phys_range_end =
+                VAddr::from(entry.phys_start + entry.page_count * BASE_PAGE_SIZE as u64);
+
+            let mut addr = phys_range_start;
+            while addr >= phys_range_start && addr <= phys_range_end {
+                let pml4_idx = pml4_index(addr);
+                if self.pml4[pml4_idx].is_present() {
+                    let pdpt_idx = pdpt_index(addr);
+                    let pdpt = self.get_pdpt(self.pml4[pml4_idx]);
+                    if pdpt[pdpt_idx].is_present() {
+                        if pdpt[pdpt_idx].is_page() {
+                            // Page is a 1 GiB mapping, we have to return here
+                            let page_offset = addr.huge_page_offset();
+                            let paddr = pdpt[pdpt_idx].address() + page_offset;
+                            let flags = pdpt[pdpt_idx].flags();
+                            addr = addr.add(HUGE_PAGE_SIZE);
+                            if flags & PDPTFlags::D == PDPTFlags::D {
+                                dirty_pages.push(paddr);
+                            }
+                        } else {
+                            let pd_idx = pd_index(addr);
+                            let pd = self.get_pd(pdpt[pdpt_idx]);
+                            if pd[pd_idx].is_present() {
+                                if pd[pd_idx].is_page() {
+                                    // Encountered a 2 MiB mapping, we have to return here
+                                    let page_offset = addr.large_page_offset();
+                                    let paddr = pd[pd_idx].address() + page_offset;
+                                    let flags = pd[pd_idx].flags();
+                                    addr = addr.add(LARGE_PAGE_SIZE);
+                                    if flags & PDFlags::D == PDFlags::D {
+                                        dirty_pages.push(paddr);
+                                    }
+                                } else {
+                                    let pt_idx = pt_index(addr);
+                                    let pt = self.get_pt(pd[pd_idx]);
+                                    if pt[pt_idx].is_present() {
+                                        let page_offset = addr.base_page_offset();
+                                        let paddr = pt[pt_idx].address() + page_offset;
+                                        let flags = pt[pt_idx].flags();
+                                        addr = addr.add(BASE_PAGE_SIZE);
+                                        if flags & PTFlags::D == PTFlags::D {
+                                            dirty_pages.push(paddr);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        dirty_pages
     }
 }
