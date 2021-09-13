@@ -998,8 +998,8 @@ dependencies = [
 name = "nrk"
 version = "0.0.4"
 dependencies = [
- "addr2line 0.16.0",
  "abomonation",
+ "addr2line 0.16.0",
  "apic",
  "arrayvec",
  "atopology",
@@ -1898,11 +1898,7 @@ checksum = "edcf43654d533a571fe7f7116373098a95ebc01279efdc5038fc45d3b220cb5a"
 dependencies = [
  "bit_field",
  "bitflags",
-<<<<<<< HEAD
  "raw-cpuid 10.2.0",
-=======
- "raw-cpuid 9.0.0",
->>>>>>> First steps towards properties tests for syscalls
 ]
 
 [[package]]
