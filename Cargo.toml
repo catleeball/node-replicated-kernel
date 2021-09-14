@@ -12,6 +12,7 @@ members = [
     "lib/node-replication/nr",
     "lib/vibrio",
     "lib/vmxnet3",
+    "lib/rust-x86",
     "usr/init",
     "usr/rkapps",
 ]
@@ -25,3 +26,6 @@ debug = true
 [profile.release]
 panic = "abort"
 debug = true
+
+[patch.crates-io]
+x86 = { path = "./lib/rust-x86" }
