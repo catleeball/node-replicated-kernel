@@ -100,7 +100,6 @@ impl RPCClientAPI for TCPClient<'_> {
         rpc_id: RPCType,
         data: Vec<u8>,
     ) -> Result<Vec<u8>, RPCError> {
-
         // Create request header
         let req_hdr = RPCHeader {
             client_id: self.client_id,
