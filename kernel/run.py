@@ -382,12 +382,9 @@ def run_qemu(args):
                     paths.append(default)
                     pmem = "on"
                 else:
-                    if len(paths) > 0:
-                        paths.append(paths[node % num_host_numa_nodes])
-                    else:
-                        f = open("{}".format(pmem_test_path), "w+")
-                        paths += [pmem_test_path] * args.qemu_nodes
-                        return paths
+                    path = "{}-{}".format(pmem_test_path, node)
+                    open(path, "w+")
+                    paths.append(path)
         return paths
 
     host_numa_nodes_list = query_host_numa()
@@ -514,8 +511,9 @@ def run_qemu(args):
             print("STDERR: {}".format(execution.stderr.decode('utf-8')))
 
     # If the test creates a fake pmem path; remove it.
-    if os.path.isfile(pmem_test_path):
-        os.remove(pmem_test_path)
+    for path in pmem_paths:
+        if os.path.isfile(path) and pmem_test_path in path:
+            os.remove(path)
 
     return nrk_exit_code
 
